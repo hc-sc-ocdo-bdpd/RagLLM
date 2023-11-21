@@ -1,0 +1,6 @@
+pandas
+tiktoken
+seaborn
+openai
+langchain
+scikit-learn
