@@ -4,3 +4,4 @@ seaborn
 openai
 langchain
 scikit-learn
+git+https://github.com/hc-sc-ocdo-bdpd/file-processing-tools.git@relative_imports
