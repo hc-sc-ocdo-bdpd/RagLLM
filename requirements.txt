@@ -1,7 +1,8 @@
 pandas
 tiktoken
 seaborn
-openai
-langchain
+openai==0.28.1
+langchain==0.0.316
 scikit-learn
 git+https://github.com/hc-sc-ocdo-bdpd/file-processing-tools.git@relative_imports
+promptflow-vectordb
