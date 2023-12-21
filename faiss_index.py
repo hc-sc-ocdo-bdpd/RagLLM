@@ -21,7 +21,7 @@ def create_index():
     MODEL_API_VERSION = "2023-05-15"
     MODEL_DEPLOYMENT_NAME = "ada_embedding"
     DIMENSION = 1536
-    os.environ["Azure_OpenAI_MODEL_ENDPOINT"] = "https://ragnalysis.openai.azure.com/"
+    os.environ["Azure_OpenAI_MODEL_ENDPOINT"] = "<ENTER ENDPOINT HERE>"
     os.environ["Azure_OpenAI_MODEL_API_KEY"] = "<ENTER API KEY>"
 
     # Configure an embedding store to store index file
