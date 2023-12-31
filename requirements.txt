@@ -6,3 +6,4 @@ langchain==0.0.316
 scikit-learn
 git+https://github.com/hc-sc-ocdo-bdpd/file-processing-tools.git@relative_imports
 promptflow-vectordb
+tqdm==4.66.1

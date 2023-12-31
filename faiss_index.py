@@ -73,7 +73,6 @@ def create_index():
             # https://learn.microsoft.com/en-us/azure/cognitive-services/openai/quotas-limits
             store.batch_insert_texts(chunks, metadatas)
             progress_bar.update()
-            print(f"Created index for {file} file successfully.\n")
 
     progress_bar.close() 
     return store
