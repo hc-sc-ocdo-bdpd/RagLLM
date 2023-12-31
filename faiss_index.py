@@ -4,7 +4,7 @@
 import os
 from typing import List
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-
+from tqdm import tqdm
 from promptflow_vectordb.core.contracts import (
     EmbeddingModelType,
     StorageType,
@@ -49,6 +49,10 @@ def create_index():
                 chunks.append(chunk)
             return chunks
         
+    # Count the total number of files for the progress bar
+    total_files = sum([len(files) for _, _, files in os.walk(local_file_path)])
+    progress_bar = tqdm(total=total_files, desc="Processing Files")
+ 
     for root, _, files in os.walk(local_file_path):
         for file in files:
             each_file_path = os.path.join(root, file)
@@ -68,6 +72,8 @@ def create_index():
             # rate limit error，you can refer to the following link to find solution
             # https://learn.microsoft.com/en-us/azure/cognitive-services/openai/quotas-limits
             store.batch_insert_texts(chunks, metadatas)
-            print(f"Create index for {file} file successfully.\n")
+            progress_bar.update()
+            print(f"Created index for {file} file successfully.\n")
 
+    progress_bar.close() 
     return store
