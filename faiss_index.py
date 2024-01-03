@@ -12,10 +12,10 @@ from promptflow_vectordb.core.contracts import (
 )
 from promptflow_vectordb.core.embeddingstore_core import EmbeddingStoreCore
 
-def create_index():
+def create_index(file_path, store_name):
 
     # Prepare data
-    local_file_path = os.path.join(os.getcwd(), "data")
+    local_file_path = file_path
 
     # Configure and create an embedding store
     MODEL_API_VERSION = "2023-05-15"
@@ -25,7 +25,7 @@ def create_index():
     os.environ["Azure_OpenAI_MODEL_API_KEY"] = "<ENTER API KEY>"
 
     # Configure an embedding store to store index file
-    store_path = os.path.join(os.getcwd(), "faiss_index_store")
+    store_path = os.path.join(os.getcwd(), store_name)
     config = StoreCoreConfig.create_config(
         storage_type=StorageType.LOCAL,
         store_identifier=store_path,
