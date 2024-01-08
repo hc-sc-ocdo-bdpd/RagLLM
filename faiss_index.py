@@ -11,8 +11,10 @@ from promptflow_vectordb.core.contracts import (
     StoreCoreConfig,
 )
 from promptflow_vectordb.core.embeddingstore_core import EmbeddingStoreCore
+import matplotlib.pyplot as plt 
+import numpy as np 
 
-def create_index(file_path, store_name):
+def create_index(file_path, store_name, graph = False):
 
     # Prepare data
     local_file_path = file_path
@@ -52,6 +54,7 @@ def create_index(file_path, store_name):
     # Count the total number of files for the progress bar
     total_files = sum([len(files) for _, _, files in os.walk(local_file_path)])
     progress_bar = tqdm(total=total_files, desc="Processing Files")
+    elapsed_times = []
  
     for root, _, files in os.walk(local_file_path):
         for file in files:
@@ -73,6 +76,18 @@ def create_index(file_path, store_name):
             # https://learn.microsoft.com/en-us/azure/cognitive-services/openai/quotas-limits
             store.batch_insert_texts(chunks, metadatas)
             progress_bar.update()
+            if graph:
+                elapsed_times.append(progress_bar.format_dict['elapsed'])
 
-    progress_bar.close() 
+    progress_bar.close()
+    # create line graph
+    if graph:  
+        x = np.array(range(progress_bar.format_dict['total']))
+        y = np.array(elapsed_times)
+        
+        plt.plot(x, y) 
+        plt.xlabel("# of Documents Indexed") 
+        plt.ylabel("Elapsed Time (seconds)")
+        plt.title("# of Documents Indexed versus Elapsed Time")
+        plt.show() 
     return store
