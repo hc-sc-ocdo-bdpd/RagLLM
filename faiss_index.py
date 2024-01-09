@@ -15,6 +15,13 @@ import matplotlib.pyplot as plt
 import numpy as np 
 
 def create_index(file_path, store_name, graph = False):
+    '''
+    Creates a Faiss index for a specific set of documents.
+    Args:   file_path (str): path to the folder of documnts to be indexed.
+            store_name (str): intended name for the file store
+            graph (bool): should a graph showing the number of documents indexed versus elapsed time be produced?
+    Returns: the created file store
+    '''
 
     # Prepare data
     local_file_path = file_path
