@@ -1,5 +1,3 @@
-# Code adapted from https://github.com/Azure/azureml-examples/blob/main/sdk/python/generative-ai/promptflow/create_faiss_index.ipynb
-
 # Import libraries
 import os
 from typing import List
@@ -16,9 +14,11 @@ DIMENSION = 1536
 M = 8
 NBITS = 8
 
-# TODO: Figure out how to incrementally add docs to index
-# TODO: Save index to local storage
+# TODO: Figure out how to incrementally add docs to index -> read in index and then add
+# TODO: Save index to local storage -> testing .faiss file -> check if same as other .faiss file
+# https://docs.llamaindex.ai/en/latest/examples/vector_stores/FaissIndexDemo.html#
 
+# Create chunks and embeddings
 def get_embeddings(client: AzureOpenAI, file_name: str) -> List[int]:
     with open(file_name, "r", encoding="utf-8") as f:
         page_content = f.read()
@@ -32,6 +32,7 @@ def get_embeddings(client: AzureOpenAI, file_name: str) -> List[int]:
             doc_embeddings.append(np.array(response.data[0].embedding))
     return doc_embeddings
 
+# Create PQ index
 def create_index(file_path, store_name, graph = False):
     '''
     Creates a Faiss index for a specific set of documents.
@@ -41,10 +42,9 @@ def create_index(file_path, store_name, graph = False):
     Returns: the created file store
     '''
 
-    # Prepare data
     local_file_path = file_path
 
-    # Configure and create an embedding store
+    # Create embedding client
     client = AzureOpenAI(
         azure_deployment = MODEL_DEPLOYMENT_NAME, 
         api_version = MODEL_API_VERSION,
@@ -68,10 +68,10 @@ def create_index(file_path, store_name, graph = False):
             with open(each_file_path, "r", encoding="utf-8") as f:
                 title = f.readline().strip('\n')
 
-            # Split the file into chunks.
-            embeddings.extend(get_embeddings(client, each_file_path))
-            # TODO: Update count
-            count = len(embeddings)
+            # Create embeddings
+            new_embeddings = get_embeddings(client, each_file_path)
+            embeddings.extend(new_embeddings)
+            count = len(new_embeddings)
             metadatas.extend([
                 {"title": title, "source": os.path.join(file)}
             ] * count)
@@ -80,11 +80,19 @@ def create_index(file_path, store_name, graph = False):
             if graph:
                 elapsed_times.append(progress_bar.format_dict['elapsed'])
 
+    # Create array of embeddings
     xb = np.array(embeddings)
     # print(xb.shape)
 
+    # Train index and add embeddings to it
     index = faiss.IndexPQ(DIMENSION, M, NBITS)
-    index.train(xb)
+    if not index.is_trained:
+        index.train(xb)
+    index.add(xb)
+
+    # Write index to local file
+    print(index.ntotal)
+    faiss.write_index(index, 'new_faiss_index_store/index.faiss')
 
     progress_bar.close()
     # create line graph
