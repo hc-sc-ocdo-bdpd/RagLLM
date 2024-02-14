@@ -1,9 +1,7 @@
 # Import libraries
 import os
-from typing import List
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.docstore.document import Document
-from langchain.docstore.base import AddableMixin, Docstore
 from langchain.docstore.in_memory import InMemoryDocstore
 from tqdm import tqdm
 import matplotlib.pyplot as plt 
@@ -21,8 +19,8 @@ DIMENSION = 1536
 M = 8
 NBITS = 8
 
-# TODO: Save index to local storage -> figure out docstore - try local_docstore?
-# https://docs.llamaindex.ai/en/latest/examples/vector_stores/FaissIndexDemo.html#
+# TODO: Verify searching
+# TODO: Create index with real embeddings
 
 # Create chunks and embeddings
 def get_embeddings(client: AzureOpenAI, file_name: str):
@@ -43,16 +41,18 @@ def get_embeddings(client: AzureOpenAI, file_name: str):
     return doc_embeddings, chunks
 
 # Create PQ index
-def create_index(file_path, folder_path, graph = False):
+def create_indexPQ(file_path, folder_path, graph = False):
     '''
     Creates a Faiss index for a specific set of documents.
     Args:   file_path (str): path to the folder of documnts to be indexed.
-            store_name (str): intended name for the file store
+            folder_path (str): intended folder for the .faiss and .pkl files
             graph (bool): should a graph showing the number of documents indexed versus elapsed time be produced?
     Returns: the created file store
     '''
 
     local_file_path = file_path
+    path = Path(folder_path)
+    path.mkdir(exist_ok=True, parents=True)
 
     # Create embedding client
     client = AzureOpenAI(
@@ -92,9 +92,6 @@ def create_index(file_path, folder_path, graph = False):
 
     # Create array of embeddings
     xb = np.array(embeddings)
-
-    path = Path(folder_path)
-    path.mkdir(exist_ok=True, parents=True)
     
     # Update Docstore
     documents = [Document(page_content=t, metadata=m) for t, m in zip(chunks, metadatas)]
@@ -108,33 +105,30 @@ def create_index(file_path, folder_path, graph = False):
         index = faiss.IndexPQ(DIMENSION, M, NBITS)
         index.train(xb)
         index.add(xb)
-        # TODO: Update pickle file
-        # index_to_docstore_id = {i: str(uuid.uuid4()) for i in range(len(documents))}
-        # docstore = InMemoryDocstore(
-        #     {index_to_docstore_id[i]: doc for i, doc in enumerate(documents)}
-        # )
+        index_to_docstore_id = {i: str(uuid.uuid4()) for i in range(len(documents))}
+        docstore = InMemoryDocstore({index_to_docstore_id[i]: doc for i, doc in enumerate(documents)})
     else:
         print("Index exists")
         index = faiss.read_index(str(path / "index.faiss"))
-        index.add(xb)
-        # TODO: Figure out docstore
-        # docstore = Docstore
-        # docstore.add({id_: doc for id_, doc in zip(ids, documents)})
-        # with open(str(path / "index.pkl"), 'rb') as f:
-        #     pkl_file = pickle.load(f)
-        # index_to_docstore_id = pkl_file[1]
-        # starting_len = len(index_to_docstore_id)
-        # index_to_id = {starting_len + j: str(uuid.uuid4()) for j in range(len(documents))}
-        # index_to_docstore_id.update(index_to_id)
+        with open(str(path / "index.pkl"), 'rb') as f:
+            docstore, index_to_docstore_id = pickle.load(f)
+        if index.ntotal != len(index_to_docstore_id):
+            return "Error: Current .index and .pkl files do not have the same length."
+        else:
+            index.add(xb)
+            starting_len = len(index_to_docstore_id)
+            index_to_id = {starting_len + j: str(uuid.uuid4()) for j in range(len(documents))}
+            index_to_docstore_id.update(index_to_id)
+            docstore.add({index_to_id[starting_len + j]: doc for j, doc in enumerate(documents)})
 
     # Write index to local file
     print("Index size:", index.ntotal)
-    # print("Pkl size:", len(index_to_docstore_id))
+    print("Pkl size:", len(index_to_docstore_id))
 
     faiss.write_index(index, str(path / "index.faiss"))
 
-    # with open(path / "index.pkl", "wb") as f:
-    #     pickle.dump((docstore, index_to_docstore_id), f)
+    with open(path / "index.pkl", "wb") as f:
+        pickle.dump((docstore, index_to_docstore_id), f)
 
     progress_bar.close()
     # create line graph
