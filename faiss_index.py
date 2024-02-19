@@ -18,27 +18,17 @@ MODEL_DEPLOYMENT_NAME = "ada_embedding"
 DIMENSION = 1536
 M = 8
 NBITS = 8
-
-# TODO: Verify searching
-# TODO: Create index with real embeddings
+MAX_ARRAY_SIZE = 2048
 
 # Create chunks and embeddings
-def get_embeddings(client: AzureOpenAI, file_name: str):
+def get_chunks(file_name: str):
     with open(file_name, "r", encoding="utf-8") as f:
         page_content = f.read()
-        doc_embeddings = []
         chunks = []
         splitter = RecursiveCharacterTextSplitter(chunk_size=1024, chunk_overlap=10)
         for chunk in splitter.split_text(page_content):
-            response = client.embeddings.create(
-                model = MODEL_DEPLOYMENT_NAME, 
-                input = chunk
-            )
-            doc_embeddings.append(np.array(response.data[0].embedding))
-            # CREATE RANDOM EMBEDDINGS FOR TESTING:
-            # doc_embeddings.append(np.array([random.random()] * DIMENSION))
             chunks.append(chunk)
-    return doc_embeddings, chunks
+    return chunks
 
 # Create PQ index
 def create_indexPQ(file_path, folder_path, graph = False):
@@ -73,14 +63,24 @@ def create_indexPQ(file_path, folder_path, graph = False):
     for root, _, files in os.walk(local_file_path):
         for file in files:
             each_file_path = os.path.join(root, file)
+            new_embeddings = []
 
             with open(each_file_path, "r", encoding="utf-8") as f:
                 title = f.readline().strip('\n')
 
             # Create embeddings
-            new_embeddings, new_chunks = get_embeddings(client, each_file_path)
+            chunks_list = get_chunks(each_file_path)
+            new_chunks = [chunks_list[i * MAX_ARRAY_SIZE:(i + 1) * MAX_ARRAY_SIZE] for i in range((len(chunks_list) + MAX_ARRAY_SIZE - 1) // MAX_ARRAY_SIZE)]  
+            # Split chunks array into size 2048 max
+            for i in range(len(new_chunks)):
+                response = client.embeddings.create(
+                    model = MODEL_DEPLOYMENT_NAME, 
+                    input = new_chunks[i]
+                )
+                for j in range(len(new_chunks[i])):
+                    new_embeddings.append(np.array(response.data[j].embedding))
             embeddings.extend(new_embeddings)
-            chunks.extend(new_chunks)
+            chunks.extend(chunks_list)
             count = len(new_embeddings)
             metadatas.extend([
                 {"title": title, "source": os.path.join(file)}
