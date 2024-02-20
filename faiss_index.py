@@ -33,9 +33,9 @@ def get_chunks(file_name: str):
 def create_indexIVF(file_path, folder_path, graph = False):
     '''
     Creates a Faiss index for a specific set of documents.
-    Args:   file_path (str): path to the folder of documnts to be indexed.
+    Args:   file_path (str): path to the folder of documents to be indexed.
             folder_path (str): intended folder for the .faiss and .pkl files
-            graph (bool): should a graph showing the number of documents indexed versus elapsed time be produced?
+            graph (bool): a graph showing the number of documents indexed versus elapsed time
     Returns: the created file store
     '''
 
@@ -142,5 +142,4 @@ def create_indexIVF(file_path, folder_path, graph = False):
         plt.ylabel("Elapsed Time (seconds)")
         plt.title("# of Documents Indexed versus Elapsed Time")
         plt.show()
-
     return index
