@@ -11,13 +11,10 @@ from openai import AzureOpenAI
 from pathlib import Path
 import pickle
 import uuid
-import random
 
 MODEL_API_VERSION = "2023-05-15"
 MODEL_DEPLOYMENT_NAME = "ada_embedding"
 DIMENSION = 1536
-M = 8
-NBITS = 8
 MAX_ARRAY_SIZE = 2048
 
 # Create chunks and embeddings
@@ -30,6 +27,7 @@ def get_chunks(file_name: str):
             chunks.append(chunk)
     return chunks
 
+# Create IndexIVFFlat
 def create_indexIVF(file_path, folder_path, graph = False):
     '''
     Creates a Faiss index for a specific set of documents.
@@ -70,6 +68,7 @@ def create_indexIVF(file_path, folder_path, graph = False):
             # Create embeddings
             chunks_list = get_chunks(each_file_path)
             new_chunks = [chunks_list[i * MAX_ARRAY_SIZE:(i + 1) * MAX_ARRAY_SIZE] for i in range((len(chunks_list) + MAX_ARRAY_SIZE - 1) // MAX_ARRAY_SIZE)]  
+            
             # Split chunks array into size 2048 max
             for i in range(len(new_chunks)):
                 response = client.embeddings.create(
@@ -85,6 +84,7 @@ def create_indexIVF(file_path, folder_path, graph = False):
                 {"title": title, "source": os.path.join(file)}
             ] * count)
 
+            # Update progress bar and graph
             progress_bar.update()
             if graph:
                 elapsed_times.append(progress_bar.format_dict['elapsed'])
@@ -96,7 +96,7 @@ def create_indexIVF(file_path, folder_path, graph = False):
     documents = [Document(page_content=t, metadata=m) for t, m in zip(chunks, metadatas)]
 
     # Train index and add embeddings to it
-    nlist = 100
+    nlist = 64
     quantizer = faiss.IndexFlatL2(DIMENSION)
     index_file = Path(str(path / "index.faiss"))
     pkl_file = Path(str(path / "index.pkl"))
@@ -125,16 +125,13 @@ def create_indexIVF(file_path, folder_path, graph = False):
     # Write index to local file
     print("Index size:", index.ntotal)
     print("Pkl size:", len(index_to_docstore_id))
-
     faiss.write_index(index, str(path / "index.faiss"))
-
     with open(path / "index.pkl", "wb") as f:
         pickle.dump((docstore, index_to_docstore_id), f)
 
-
+    # Close progress bar and create line graph
     progress_bar.close()
-    # Create line graph
-    if graph:  
+    if graph: 
         x = np.array(range(progress_bar.format_dict['total']))
         y = np.array(elapsed_times)
         plt.plot(x, y) 
