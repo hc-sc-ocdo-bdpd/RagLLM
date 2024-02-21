@@ -11,7 +11,7 @@ from openai import AzureOpenAI
 from pathlib import Path
 import pickle
 import uuid
-import random
+from tenacity import retry, stop_after_attempt, wait_random_exponential
 
 MODEL_API_VERSION = "2023-05-15"
 MODEL_DEPLOYMENT_NAME = "ada_embedding"
@@ -29,6 +29,14 @@ def get_chunks(file_name: str):
         for chunk in splitter.split_text(page_content):
             chunks.append(chunk)
     return chunks
+
+@retry(wait=wait_random_exponential(min=1, max=60), stop=stop_after_attempt(6))
+def create_embeddings(client: AzureOpenAI, chunks):
+    response = client.embeddings.create(
+        model = MODEL_DEPLOYMENT_NAME, 
+        input = chunks
+    )
+    return response
 
 # Create PQ index
 def create_indexPQ(file_path, folder_path, graph = False):
@@ -67,16 +75,12 @@ def create_indexPQ(file_path, folder_path, graph = False):
 
             with open(each_file_path, "r", encoding="utf-8") as f:
                 title = f.readline().strip('\n')
-
             # Create embeddings
             chunks_list = get_chunks(each_file_path)
-            new_chunks = [chunks_list[i * MAX_ARRAY_SIZE:(i + 1) * MAX_ARRAY_SIZE] for i in range((len(chunks_list) + MAX_ARRAY_SIZE - 1) // MAX_ARRAY_SIZE)]  
             # Split chunks array into size 2048 max
+            new_chunks = [chunks_list[i * MAX_ARRAY_SIZE:(i + 1) * MAX_ARRAY_SIZE] for i in range((len(chunks_list) + MAX_ARRAY_SIZE - 1) // MAX_ARRAY_SIZE)]  
             for i in range(len(new_chunks)):
-                response = client.embeddings.create(
-                    model = MODEL_DEPLOYMENT_NAME, 
-                    input = new_chunks[i]
-                )
+                response = create_embeddings(client, new_chunks[i])
                 for j in range(len(new_chunks[i])):
                     new_embeddings.append(np.array(response.data[j].embedding))
             embeddings.extend(new_embeddings)
