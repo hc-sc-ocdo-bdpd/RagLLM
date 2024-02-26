@@ -11,10 +11,12 @@ from openai import AzureOpenAI
 from pathlib import Path
 import pickle
 import uuid
+from tenacity import retry, stop_after_attempt, wait_random_exponential
 
 MODEL_API_VERSION = "2023-05-15"
 MODEL_DEPLOYMENT_NAME = "ada_embedding"
 DIMENSION = 1536
+NLIST = 64
 MAX_ARRAY_SIZE = 2048
 
 # Create chunks and embeddings
@@ -26,6 +28,14 @@ def get_chunks(file_name: str):
         for chunk in splitter.split_text(page_content):
             chunks.append(chunk)
     return chunks
+
+@retry(wait=wait_random_exponential(min=1, max=60), stop=stop_after_attempt(6))
+def create_embeddings(client: AzureOpenAI, chunks):
+    response = client.embeddings.create(
+        model = MODEL_DEPLOYMENT_NAME, 
+        input = chunks
+    )
+    return response
 
 # Create IndexIVFFlat
 def create_indexIVF(file_path, folder_path, graph = False):
@@ -71,10 +81,7 @@ def create_indexIVF(file_path, folder_path, graph = False):
             
             # Split chunks array into size 2048 max
             for i in range(len(new_chunks)):
-                response = client.embeddings.create(
-                    model = MODEL_DEPLOYMENT_NAME, 
-                    input = new_chunks[i]
-                )
+                response = create_embeddings(client, new_chunks[i])
                 for j in range(len(new_chunks[i])):
                     new_embeddings.append(np.array(response.data[j].embedding))
             embeddings.extend(new_embeddings)
@@ -96,14 +103,13 @@ def create_indexIVF(file_path, folder_path, graph = False):
     documents = [Document(page_content=t, metadata=m) for t, m in zip(chunks, metadatas)]
 
     # Train index and add embeddings to it
-    nlist = 64
     quantizer = faiss.IndexFlatL2(DIMENSION)
     index_file = Path(str(path / "index.faiss"))
     pkl_file = Path(str(path / "index.pkl"))
 
     if not index_file.is_file() or not pkl_file.is_file():
         print("Index does not exist")
-        index = faiss.IndexIVFFlat(quantizer, DIMENSION, nlist)
+        index = faiss.IndexIVFFlat(quantizer, DIMENSION, NLIST)
         index.train(xb)
         index.add(xb)
         index_to_docstore_id = {i: str(uuid.uuid4()) for i in range(len(documents))}
