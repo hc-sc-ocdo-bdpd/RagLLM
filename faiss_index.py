@@ -30,6 +30,8 @@ class FaissIndex(ABC):
             api_key = os.environ["OPENAI_API_KEY"]
         )
         self.index = None
+        self.docstore = None
+        self.index_to_docstore_id = None
 
     def _get_chunks(self, file_name: str) -> List[str]:
         """Split documents into chunks."""
@@ -147,6 +149,16 @@ class FaissIndex(ABC):
             plt.show()
 
         self.index = index
+        self.docstore = docstore
+        self.index_to_docstore_id = index_to_docstore_id
+
+    def read(self):
+        index = faiss.read_index(str(self.folder_path / "index.faiss"))
+        with open(str(self.folder_path / "index.pkl"), 'rb') as f:
+            docstore, index_to_docstore_id = pickle.load(f)
+        self.index = index
+        self.docstore = docstore
+        self.index_to_docstore_id = index_to_docstore_id
 
     def query(self, q: str):
         """Search the index with a query."""
@@ -161,10 +173,8 @@ class FaissIndex(ABC):
             results = self.index.search(q_embedding, 3)
             docs = results[1][0]
             scores = results[0][0]
-            with open(str(self.folder_path / "index.pkl"), 'rb') as f:
-                docstore, index_to_docstore_id = pickle.load(f)
             for i in range(len(docs)):
-                d = docstore.search(index_to_docstore_id.get(docs[i]))
+                d = self.docstore.search(self.index_to_docstore_id.get(docs[i]))
                 print(f"Source: {d.metadata.get('source')}")
                 print(f"{d.metadata.get('title')}")
                 print(f"Content: {d.page_content}")
