@@ -134,6 +134,7 @@ class FaissIndex(ABC):
 
         # Write index to local files
         faiss.write_index(index, str(path / "index.faiss"))
+        print(os.path.getsize(str(path / "index.faiss"))/1000)
         with open(path / "index.pkl", "wb") as f:
             pickle.dump((docstore, index_to_docstore_id), f)
     
@@ -160,7 +161,7 @@ class FaissIndex(ABC):
         self.docstore = docstore
         self.index_to_docstore_id = index_to_docstore_id
 
-    def query(self, q: str):
+    def query(self, q: str, k: int):
         """Search the index with a query."""
         # Create query embedding
         response = self.client.embeddings.create(
@@ -170,7 +171,7 @@ class FaissIndex(ABC):
         q_embedding = np.array([response.data[0].embedding])
 
         if self.index is not None:
-            results = self.index.search(q_embedding, 3)
+            results = self.index.search(q_embedding, k)
             docs = results[1][0]
             scores = results[0][0]
             for i in range(len(docs)):
