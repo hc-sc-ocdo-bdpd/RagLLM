@@ -5,6 +5,6 @@ class IndexFlatL2(FaissIndex):
     def __init__(self) -> None:
         super().__init__()
 
-    def create(self, input_path: str, output_path: str, graph: bool = False):
+    def create(self, input_path: str, output_path: str):
         index_constructor = faiss.IndexFlatL2(self.DIMENSION)
-        super().create(index_constructor, input_path, output_path, graph)
+        super().create(index_constructor, input_path, output_path)

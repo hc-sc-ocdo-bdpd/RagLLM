@@ -7,6 +7,6 @@ class IndexPQ(FaissIndex):
         self.M = 8
         self.NBITS = 8
 
-    def create(self, input_path: str, output_path: str, graph: bool = False):
+    def create(self, input_path: str, output_path: str):
         index_constructor = faiss.IndexPQ(self.DIMENSION, self.M, self.NBITS)
-        super().create(index_constructor, input_path, output_path, graph)
+        super().create(index_constructor, input_path, output_path)

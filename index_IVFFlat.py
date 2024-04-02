@@ -6,7 +6,7 @@ class IndexIVFFlat(FaissIndex):
         super().__init__()
         self.NLIST = 64
 
-    def create(self, input_path: str, output_path: str, graph: bool = False):
+    def create(self, input_path: str, output_path: str):
         quantizer = faiss.IndexFlatL2(self.DIMENSION)
         index_constructor = faiss.IndexIVFFlat(quantizer, self.DIMENSION, self.NLIST)
-        super().create(index_constructor, input_path, output_path, graph)
+        super().create(index_constructor, input_path, output_path)

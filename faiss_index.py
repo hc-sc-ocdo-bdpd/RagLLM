@@ -51,54 +51,30 @@ class FaissIndex(ABC):
         return response
 
     @abstractmethod
-    def create(self, index_constructor, input_path: str, output_path: str, graph: bool = False):
+    def create(self, index_constructor, input_path: str, output_path: str):
         """
-        Args:   input_path: Folder path to the files being indexed.
+        Args:   index_constructor: Faiss index type to create.
+                input_path: Folder path to the files being indexed or path to folder containing embeddings.npy, chunks.npy, and metadatas.pkl.
                 output_path: Name of the output folder to store the .faiss and .pkl files.
-                graph: Boolean indicating whether a graph showing elapsed time per document should be returned.
         """
         if (input_path is not None or input_path != "") and (output_path is not None or output_path != ""):
             # Create path to index file folder
             path = Path(output_path)
             path.mkdir(exist_ok=True, parents=True)
 
-            # Count the total number of files for the progress bar
-            total_files = sum([len(files) for _, _, files in os.walk(input_path)])
-            progress_bar = tqdm(total = total_files, desc = "Processing Files")
-            elapsed_times, chunks, metadatas, embeddings = [], [], [], []
-        
-            for root, _, files in os.walk(input_path):
-                for file in files:
-                    each_file_path = os.path.join(root, file)
-                    new_embeddings = []
-                    with open(each_file_path, "r", encoding="utf-8") as f:
-                        title = f.readline().strip('\n')
-                    
-                    # Create chunks for each document
-                    chunks_list = self._get_chunks(each_file_path)
-                    
-                    # Split chunks array into size 2048 max
-                    new_chunks = [chunks_list[i * self.MAX_ARRAY_SIZE:(i + 1) * self.MAX_ARRAY_SIZE] for i in range((len(chunks_list) + self.MAX_ARRAY_SIZE - 1) // self.MAX_ARRAY_SIZE)]  
-                    
-                    # Create embeddings for the chunks array
-                    for i in range(len(new_chunks)):
-                        response = self._create_embeddings(new_chunks[i])
-                        for j in range(len(new_chunks[i])):
-                            new_embeddings.append(np.array(response.data[j].embedding))
-                    
-                    # Record embeddings, chunks, count, and metadata
-                    embeddings.extend(new_embeddings)
-                    chunks.extend(chunks_list)
-                    count = len(new_embeddings)
-                    metadatas.extend([
-                        {"title": title, "source": os.path.join(file)}
-                    ] * count)
-
-                    # Update progress bar
-                    progress_bar.update()
-                    if graph:
-                        elapsed_times.append(progress_bar.format_dict['elapsed'])
-
+            # Check contents of input_path
+            files = os.listdir(input_path) # returns list
+            if len(files) == 3 and set(files) == set(["chunks.npy", "embeddings.npy", "metadatas.pkl"]):
+                print("here")
+                embeddings = np.load(str(Path(input_path) / 'embeddings.npy'))
+                chunks = np.load(str(Path(input_path) / 'chunks.npy'))
+                with open(str(Path(input_path) / 'metadatas.pkl'), 'rb') as f:
+                    metadatas = pickle.load(f)
+            else:
+                print("not here")
+                chunks, metadatas, embeddings = self.save_embeddings(input_path, False)
+            
+            t0 = time.time()
             # Create array of embeddings
             xb = np.array(embeddings)
             
@@ -132,25 +108,18 @@ class FaissIndex(ABC):
                     docstore.add({index_to_id[starting_len + j]: doc for j, doc in enumerate(documents)})
 
             # Print file sizes (for testing)
-            print("Index size:", index.ntotal)
-            print("Pkl size:", len(index_to_docstore_id))
+            print("Number of docs in .faiss file:", index.ntotal)
+            print("Number of docs in .pkl file:", len(index_to_docstore_id))
 
             # Write index to local files
             faiss.write_index(index, str(path / "index.faiss"))
-            print(os.path.getsize(str(path / "index.faiss"))/1000)
+            print(f"File size: {os.path.getsize(str(path / 'index.faiss'))/1000} KB")
             with open(path / "index.pkl", "wb") as f:
                 pickle.dump((docstore, index_to_docstore_id), f)
         
             # Create line graph
-            progress_bar.close()
-            if graph:  
-                x = np.array(range(progress_bar.format_dict['total']))
-                y = np.array(elapsed_times)
-                plt.plot(x, y) 
-                plt.xlabel("# of Documents Indexed") 
-                plt.ylabel("Elapsed Time (seconds)")
-                plt.title("# of Documents Indexed versus Elapsed Time")
-                plt.show()
+            t1 = time.time()
+            print(f"Time to create index: {round(t1 - t0, 4)} seconds")
 
             self.index = index
             self.docstore = docstore
@@ -166,6 +135,77 @@ class FaissIndex(ABC):
         self.index = index
         self.docstore = docstore
         self.index_to_docstore_id = index_to_docstore_id
+
+    def save_embeddings(self, input_path: str, save: bool = True, existing_files: str = None):
+        """
+        Args:   input_path: Folder path to the files being indexed.
+                save: Boolean of whether to save chunks, metadatas, and embeddings to files.
+                existing_files: Folder path containing existing embeddings.npy, chunks.npy, and metadatas.pkl.
+        """
+        # Count the total number of files for the progress bar
+        total_files = sum([len(files) for _, _, files in os.walk(input_path)])
+        progress_bar = tqdm(total = total_files, desc = "Processing Files")
+        if existing_files is not None:
+            files = os.listdir(existing_files)
+            if len(files) == 3 and set(files) == set(["chunks.npy", "embeddings.npy", "metadatas.pkl"]):
+                np_embeddings = np.load(str(Path(existing_files) / 'embeddings.npy'))
+                np_chunks = np.load(str(Path(existing_files) / 'chunks.npy'))
+                with open(str(Path(existing_files) / 'metadatas.pkl'), 'rb') as f:
+                    metadatas = pickle.load(f)
+                embeddings = np_embeddings.tolist()
+                chunks = np_chunks.tolist()
+            else:
+                chunks, metadatas, embeddings = [], [], []
+        else:
+            chunks, metadatas, embeddings = [], [], []
+
+        for root, _, files in os.walk(input_path):
+            for file in files:
+                each_file_path = os.path.join(root, file)
+                new_embeddings = []
+                with open(each_file_path, "r", encoding="utf-8") as f:
+                    title = f.readline().strip('\n')
+                
+                # Create chunks for each document
+                chunks_list = self._get_chunks(each_file_path)
+                
+                # Split chunks array into size 2048 max
+                new_chunks = [chunks_list[i * self.MAX_ARRAY_SIZE:(i + 1) * self.MAX_ARRAY_SIZE] for i in range((len(chunks_list) + self.MAX_ARRAY_SIZE - 1) // self.MAX_ARRAY_SIZE)]  
+                
+                # Create embeddings for the chunks array
+                for i in range(len(new_chunks)):
+                    response = self._create_embeddings(new_chunks[i])
+                    for j in range(len(new_chunks[i])):
+                        new_embeddings.append(np.array(response.data[j].embedding))
+                
+                # Record embeddings, chunks, count, and metadata
+                embeddings.extend(new_embeddings)
+                chunks.extend(chunks_list)
+                count = len(new_embeddings)
+                metadatas.extend([
+                    {"title": title, "source": os.path.join(file)}
+                ] * count)
+
+                # Update progress bar
+                progress_bar.update()
+
+            if save:
+                progress_bar.close()
+                # Create array of embeddings
+                all_embeddings = np.array(embeddings)
+                all_chunks = np.array(chunks)
+                # all_metadatas = np.array(metadatas)
+                output_path = Path("saved_files")
+                output_path.mkdir(exist_ok=True, parents=True)
+                np.save(str(output_path / 'embeddings.npy'), all_embeddings)
+                np.save(str(output_path / 'chunks.npy'), all_chunks)
+                with open(str(output_path / 'metadatas.pkl'), "wb") as f:
+                    pickle.dump(metadatas, f)
+                print(all_embeddings.shape)
+                print(all_chunks.shape)
+                print(len(metadatas))
+            else:
+                return chunks, metadatas, embeddings
 
     def query(self, q: str, k: int):
         """Search the index with a query."""
