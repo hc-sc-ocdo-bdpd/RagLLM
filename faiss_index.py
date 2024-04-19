@@ -41,7 +41,7 @@ class FaissIndex(ABC):
                 chunks.append(chunk)
         return chunks
     
-    @retry(wait = wait_random_exponential(min = 1, max = 60), stop = stop_after_attempt(6))
+    @retry(wait = wait_random_exponential(min = 1, max = 120), stop = stop_after_attempt(10))
     def _create_embeddings(self, chunks: List[str]):
         """Create embeddings for each document chunk."""
         response = self.client.embeddings.create(
@@ -65,13 +65,11 @@ class FaissIndex(ABC):
             # Check contents of input_path
             files = os.listdir(input_path) # returns list
             if len(files) == 3 and set(files) == set(["chunks.npy", "embeddings.npy", "metadatas.pkl"]):
-                print("here")
                 embeddings = np.load(str(Path(input_path) / 'embeddings.npy'))
                 chunks = np.load(str(Path(input_path) / 'chunks.npy'))
                 with open(str(Path(input_path) / 'metadatas.pkl'), 'rb') as f:
                     metadatas = pickle.load(f)
             else:
-                print("not here")
                 chunks, metadatas, embeddings = self.save_embeddings(input_path, False)
             
             t0 = time.time()
@@ -136,28 +134,15 @@ class FaissIndex(ABC):
         self.docstore = docstore
         self.index_to_docstore_id = index_to_docstore_id
 
-    def save_embeddings(self, input_path: str, save: bool = True, existing_files: str = None):
+    def save_embeddings(self, input_path: str, save: bool = True):
         """
         Args:   input_path: Folder path to the files being indexed.
                 save: Boolean of whether to save chunks, metadatas, and embeddings to files.
-                existing_files: Folder path containing existing embeddings.npy, chunks.npy, and metadatas.pkl.
         """
         # Count the total number of files for the progress bar
         total_files = sum([len(files) for _, _, files in os.walk(input_path)])
         progress_bar = tqdm(total = total_files, desc = "Processing Files")
-        if existing_files is not None:
-            files = os.listdir(existing_files)
-            if len(files) == 3 and set(files) == set(["chunks.npy", "embeddings.npy", "metadatas.pkl"]):
-                np_embeddings = np.load(str(Path(existing_files) / 'embeddings.npy'))
-                np_chunks = np.load(str(Path(existing_files) / 'chunks.npy'))
-                with open(str(Path(existing_files) / 'metadatas.pkl'), 'rb') as f:
-                    metadatas = pickle.load(f)
-                embeddings = np_embeddings.tolist()
-                chunks = np_chunks.tolist()
-            else:
-                chunks, metadatas, embeddings = [], [], []
-        else:
-            chunks, metadatas, embeddings = [], [], []
+        chunks, metadatas, embeddings = [], [], []
 
         for root, _, files in os.walk(input_path):
             for file in files:
@@ -201,9 +186,6 @@ class FaissIndex(ABC):
                 np.save(str(output_path / 'chunks.npy'), all_chunks)
                 with open(str(output_path / 'metadatas.pkl'), "wb") as f:
                     pickle.dump(metadatas, f)
-                print(all_embeddings.shape)
-                print(all_chunks.shape)
-                print(len(metadatas))
             else:
                 return chunks, metadatas, embeddings
 
