@@ -214,3 +214,38 @@ class FaissIndex(ABC):
             print(f"Time to complete query search in seconds: {end - start}")
         else:
             return "Error: No index exists. Please use the create() function to make one or the read() function to read one in."
+        
+    def embed_text(self, q: str):
+        """Convert a string of text to an embedding"""
+        if self.index is not None:
+            response = self.client.embeddings.create(
+                model = self.MODEL_DEPLOYMENT_NAME, 
+                input = q
+            )
+            return np.array([response.data[0].embedding])
+        
+    def query_embedding(self, q_embedding, k: int):
+        """Search the index with an embedding and store the results"""
+        if self.index is not None:
+            search_results = []
+            start = time.time()
+            results = self.index.search(q_embedding, k)
+            docs = results[1][0]
+            scores = results[0][0]
+            for i in range(len(docs)):
+                d = self.docstore.search(self.index_to_docstore_id.get(docs[i]))
+                result_dict = {
+                    "Source": d.metadata.get('source'),
+                    "Title": d.metadata.get('title'),
+                    "Content": d.page_content,
+                    "Score": scores[i]
+                }
+                search_results.append(result_dict)
+            end = time.time()
+            query_results = {
+                "Content": search_results,
+                "Time": end - start
+            }
+            return query_results
+        else:
+            return "Error: No index exists. Please use the create() function to make one or the read() function to read one in."
