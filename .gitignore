@@ -162,3 +162,4 @@ cython_debug/
 # Data folders
 100K_embeddings/
 test_Flat
+test_IVFFlat
