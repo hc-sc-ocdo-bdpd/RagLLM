@@ -4,8 +4,8 @@ import faiss
 class IndexHNSW(FaissIndex):
     def __init__(self) -> None:
         super().__init__()
-        self.M = 32
 
-    def create(self, input_path: str, output_path: str):
+    def create(self, input_path: str, output_path: str, M: int):
+        self.M = M
         index_constructor = faiss.IndexHNSWFlat(self.DIMENSION, self.M)
         super().create(index_constructor, input_path, output_path)
